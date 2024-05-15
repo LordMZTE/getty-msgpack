@@ -28,6 +28,7 @@ pub fn Serializer(
                 .serializeInt = serializeInt,
                 .serializeFloat = serializeFloat,
                 .serializeString = serializeString,
+                .serializeEnum = serializeEnum,
                 .serializeSeq = serializeSeq,
                 .serializeMap = serializeMap,
                 .serializeStruct = serializeStruct,
@@ -130,6 +131,11 @@ pub fn Serializer(
                     }
                 } else return error.StringTooLong;
             }
+        }
+
+        fn serializeEnum(self: *Self, index: anytype, variant: []const u8) Error!void {
+            _ = index;
+            try self.serializeString(variant);
         }
 
         fn serializeSeq(self: *Self, len_: ?usize) Error!Seq {
@@ -333,6 +339,17 @@ test "Serialize string" {
         0xd9, 0x20,
         // zig fmt: on
     } ++ "i".* ** 32, fbs.getWritten());
+}
+
+test "Serialize enum" {
+    var buf: [32]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+
+    try serialize(fbs.writer(), .foo);
+
+    try std.testing.expectEqualSlices(u8, &.{
+        0xa3, 0x66, 0x6f, 0x6f,
+    }, fbs.getWritten());
 }
 
 test "Serialize array" {
