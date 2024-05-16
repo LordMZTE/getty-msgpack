@@ -21,7 +21,6 @@ pub fn Serializer(
             Seq,
             Seq,
             .{
-                // TODO: bin format?
                 .serializeVoid = serializeNull,
                 .serializeNull = serializeNull,
                 .serializeBool = serializeBool,
@@ -40,7 +39,7 @@ pub fn Serializer(
             /// The integer is too big to be encoded by MsgPack
             IntegerTooLarge,
 
-            /// The string is too long to be encoded by MsgPack
+            /// The string or bytes are too long to be encoded by MsgPack
             StringTooLong,
 
             /// The sequence or map is too long to be encoded by MsgPack
@@ -52,6 +51,24 @@ pub fn Serializer(
             /// The number of elements serialized in a sequence or map does not match the advertised count.
             SeqLengthMismatch,
         };
+
+        // >>>>> NON-STANDARD CUSTOM FUNCTIONS
+
+        /// A function to serialize a value as msgpack's bytes type. Useful with custom SBs.
+        pub fn serializeBytes(self: *Self, val: []const u8) Error!void {
+            inline for (.{ u8, u16, u32 }, 0..) |N, i| {
+                if (val.len <= std.math.maxInt(N)) {
+                    // bin: 0xc4 + i followed by BE length and data
+                    try self.writer.writeByte(0xc4 + i);
+                    try self.writer.writeAll(std.mem.asBytes(&std.mem.nativeToBig(N, @intCast(i))));
+                    try self.writer.writeAll(val);
+                    break;
+                }
+            } else return error.StringTooLong;
+        }
+        // TODO: ext format?
+
+        // >>>>> SERIALIZER INTERFACE
 
         fn serializeNull(self: *Self) Error!void {
             // nil: 0xc0
