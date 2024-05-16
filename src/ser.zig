@@ -60,7 +60,7 @@ pub fn Serializer(
                 if (val.len <= std.math.maxInt(N)) {
                     // bin: 0xc4 + i followed by BE length and data
                     try self.writer.writeByte(0xc4 + i);
-                    try self.writer.writeAll(std.mem.asBytes(&std.mem.nativeToBig(N, @intCast(i))));
+                    try self.writer.writeInt(N, @intCast(i), .big);
                     try self.writer.writeAll(val);
                     break;
                 }
@@ -91,7 +91,7 @@ pub fn Serializer(
                     if (val <= std.math.maxInt(N)) {
                         // uint: 0xcc + i followed by BE bytes
                         try self.writer.writeByte(0xcc + i);
-                        try self.writer.writeAll(std.mem.asBytes(&std.mem.nativeToBig(N, @intCast(val))));
+                        try self.writer.writeInt(N, @intCast(val), .big);
                         break;
                     }
                 } else return error.IntegerTooLarge;
@@ -100,7 +100,7 @@ pub fn Serializer(
                     if (val >= std.math.minInt(N)) {
                         // iint: 0xd0 + i follwed by BE bytes
                         try self.writer.writeByte(0xd0 + i);
-                        try self.writer.writeAll(std.mem.asBytes(&std.mem.nativeToBig(N, @intCast(val))));
+                        try self.writer.writeInt(N, @intCast(val), .big);
                         break;
                     }
                 } else return error.IntegerTooLarge;
@@ -113,16 +113,12 @@ pub fn Serializer(
                     // f32: 0xca + IEEE 754 bytes
                     try self.writer.writeByte(0xca);
                     // HACK: we bitCast to an int here as byteSwap does not work on floats
-                    try self.writer.writeAll(std.mem.asBytes(
-                        &std.mem.nativeToBig(u32, @bitCast(val)),
-                    ));
+                    try self.writer.writeInt(u32, @bitCast(val), .big);
                 },
                 comptime_float, f64 => {
                     // f64: 0xcb + IEEE 754 bytes
                     try self.writer.writeByte(0xcb);
-                    try self.writer.writeAll(std.mem.asBytes(
-                        &std.mem.nativeToBig(u64, @bitCast(@as(f64, val))),
-                    ));
+                    try self.writer.writeInt(u64, @bitCast(@as(f64, val)), .big);
                 },
                 else => @compileError("Invalid type passed to serializeFloat: " ++ @typeName(@TypeOf(val))),
             }
@@ -140,9 +136,7 @@ pub fn Serializer(
                     if (val.len <= std.math.maxInt(N)) {
                         // str: 0d9 + i followed by BE len and bytes
                         try self.writer.writeByte(0xd9 + i);
-                        try self.writer.writeAll(std.mem.asBytes(
-                            &std.mem.nativeToBig(N, @intCast(val.len)),
-                        ));
+                        try self.writer.writeInt(N, @intCast(val.len), .big);
                         try self.writer.writeAll(val);
                         break;
                     }
@@ -166,9 +160,7 @@ pub fn Serializer(
                     // array: 0xdc + i followed by BE length and elements
                     if (len <= std.math.maxInt(N)) {
                         try self.writer.writeByte(0xdc + i);
-                        try self.writer.writeAll(std.mem.asBytes(
-                            &std.mem.nativeToBig(N, @intCast(len)),
-                        ));
+                        try self.writer.writeInt(N, @intCast(len), .big);
                         break;
                     }
                 } else return error.SeqTooLong;
@@ -188,9 +180,7 @@ pub fn Serializer(
                     // map: 0xde + i followed by BE length and elements (len * 2: k, v)
                     if (len <= std.math.maxInt(N)) {
                         try self.writer.writeByte(0xde + i);
-                        try self.writer.writeAll(std.mem.asBytes(
-                            &std.mem.nativeToBig(N, @intCast(len)),
-                        ));
+                        try self.writer.writeInt(N, @intCast(len), .big);
                         break;
                     }
                 } else return error.SeqTooLong;
