@@ -8,6 +8,7 @@ pub fn Serializer(
 ) type {
     return struct {
         writer: Writer,
+        alloc: ?std.mem.Allocator,
 
         const Self = @This();
 
@@ -35,7 +36,7 @@ pub fn Serializer(
             },
         );
 
-        pub const Error = getty.ser.Error || Writer.Error || error{
+        pub const Error = getty.ser.Error || std.mem.Allocator.Error || Writer.Error || error{
             /// The integer is too big to be encoded by MsgPack
             IntegerTooLarge,
 
@@ -195,7 +196,7 @@ pub fn Serializer(
         }
 
         fn serializeSome(self: *Self, val: anytype) Error!void {
-            try getty.serialize(null, val, self.serializer());
+            try getty.serialize(self.alloc, val, self.serializer());
         }
 
         const Seq = struct {
@@ -237,7 +238,7 @@ pub fn Serializer(
             fn serializeElement(self: *Seq, val: anytype) Error!void {
                 // Too many elements
                 if (self.nwritten == self.len) return error.SeqLengthMismatch;
-                try getty.serialize(null, val, self.ser.serializer());
+                try getty.serialize(self.ser.alloc, val, self.ser.serializer());
                 self.nwritten += 1;
             }
 
@@ -254,27 +255,36 @@ pub fn Serializer(
 }
 
 /// Create a new `Serializer` with a given underlying writer and an SBT.
-pub fn serializer(writer: anytype, sbt: anytype) Serializer(@TypeOf(writer), sbt) {
-    return .{ .writer = writer };
+pub fn serializer(
+    alloc: ?std.mem.Allocator,
+    writer: anytype,
+    sbt: anytype,
+) Serializer(@TypeOf(writer), sbt) {
+    return .{ .writer = writer, .alloc = alloc };
 }
 
 /// Serialize the given value to the given writer, using a custom SBT.
-pub fn serializeWith(writer: anytype, value: anytype, sbt: anytype) !void {
-    var ser = serializer(writer, sbt);
-    try getty.serialize(null, value, ser.serializer());
+pub fn serializeWith(
+    alloc: ?std.mem.Allocator,
+    writer: anytype,
+    value: anytype,
+    sbt: anytype,
+) !void {
+    var ser = serializer(alloc, writer, sbt);
+    try getty.serialize(alloc, value, ser.serializer());
 }
 
 /// Serialize the given value to the given writer.
-pub fn serialize(writer: anytype, value: anytype) !void {
-    try serializeWith(writer, value, .{});
+pub fn serialize(alloc: ?std.mem.Allocator, writer: anytype, value: anytype) !void {
+    try serializeWith(alloc, writer, value, .{});
 }
 
 test "Serialize null/void" {
     var buf: [2]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), null);
-    try serialize(fbs.writer(), {});
+    try serialize(null, fbs.writer(), null);
+    try serialize(null, fbs.writer(), {});
 
     try std.testing.expectEqualSlices(u8, &.{ 0xc0, 0xc0 }, fbs.getWritten());
 }
@@ -283,8 +293,8 @@ test "Serialize bool" {
     var buf: [2]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), true);
-    try serialize(fbs.writer(), false);
+    try serialize(null, fbs.writer(), true);
+    try serialize(null, fbs.writer(), false);
 
     try std.testing.expectEqualSlices(u8, &.{ 0xc3, 0xc2 }, fbs.getWritten());
 }
@@ -293,15 +303,15 @@ test "Serialize int" {
     var buf: [32]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), 64); // pos fixint
-    try serialize(fbs.writer(), -32); // neg fixint
-    try serialize(fbs.writer(), std.math.maxInt(u16)); // u16
-    try serialize(fbs.writer(), std.math.minInt(i16)); // i16
-    try serialize(fbs.writer(), std.math.maxInt(u32)); // u32
-    try serialize(fbs.writer(), std.math.minInt(i32)); // i32
+    try serialize(null, fbs.writer(), 64); // pos fixint
+    try serialize(null, fbs.writer(), -32); // neg fixint
+    try serialize(null, fbs.writer(), std.math.maxInt(u16)); // u16
+    try serialize(null, fbs.writer(), std.math.minInt(i16)); // i16
+    try serialize(null, fbs.writer(), std.math.maxInt(u32)); // u32
+    try serialize(null, fbs.writer(), std.math.minInt(i32)); // i32
     try std.testing.expectError(
         error.IntegerTooLarge,
-        serialize(fbs.writer(), std.math.maxInt(u64) + 1),
+        serialize(null, fbs.writer(), std.math.maxInt(u64) + 1),
     );
 
     try std.testing.expectEqualSlices(u8, &.{
@@ -320,9 +330,9 @@ test "Serialize float" {
     var buf: [32]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), @as(f32, 0.5));
-    try serialize(fbs.writer(), @as(f64, 0.5));
-    try serialize(fbs.writer(), 0.5); // comptime_float
+    try serialize(null, fbs.writer(), @as(f32, 0.5));
+    try serialize(null, fbs.writer(), @as(f64, 0.5));
+    try serialize(null, fbs.writer(), 0.5); // comptime_float
 
     try std.testing.expectEqualSlices(u8, &.{
         // zig fmt: off
@@ -337,8 +347,8 @@ test "Serialize string" {
     var buf: [128]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), "iiii"); // fixstr
-    try serialize(fbs.writer(), "i" ** 32); // str8
+    try serialize(null, fbs.writer(), "iiii"); // fixstr
+    try serialize(null, fbs.writer(), "i" ** 32); // str8
 
     try std.testing.expectEqualSlices(u8, &[_]u8{
         // zig fmt: off
@@ -352,7 +362,7 @@ test "Serialize enum" {
     var buf: [32]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), .foo);
+    try serialize(null, fbs.writer(), .foo);
 
     try std.testing.expectEqualSlices(u8, &.{
         0xa3, 0x66, 0x6f, 0x6f,
@@ -363,8 +373,8 @@ test "Serialize array" {
     var buf: [128]u8 = undefined;
     var fbs = std.io.fixedBufferStream(&buf);
 
-    try serialize(fbs.writer(), [_]u8{105, 105}); // fixarray
-    try serialize(fbs.writer(), [_]u8{105} ** 16); // array16
+    try serialize(null, fbs.writer(), [_]u8{105, 105}); // fixarray
+    try serialize(null, fbs.writer(), [_]u8{105} ** 16); // array16
 
     try std.testing.expectEqualSlices(u8, &.{
         // zig fmt: off
@@ -380,13 +390,13 @@ test "Serialize map" {
     var fbs = std.io.fixedBufferStream(&buf);
 
     // serializeMap
-    try serialize(
+    try serialize(null, 
         fbs.writer(),
         (union(enum){foo: []const u8}){.foo = "bar"},
     );
 
     // serializeStruct
-    try serialize(
+    try serialize(null, 
         fbs.writer(),
         .{.foo = "bar"},
     );
@@ -394,5 +404,20 @@ test "Serialize map" {
     try std.testing.expectEqualSlices(u8, &.{
         0x81, 0xa3, 0x66, 0x6f, 0x6f, 0xa3, 0x62, 0x61, 0x72,
         0x81, 0xa3, 0x66, 0x6f, 0x6f, 0xa3, 0x62, 0x61, 0x72,
+    }, fbs.getWritten());
+}
+
+test "Serialize semver" {
+    var buf: [128]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+
+    try serialize(
+        std.testing.allocator,
+        fbs.writer(),
+        std.SemanticVersion{ .major = 0, .minor = 1, .patch = 0 },
+    );
+
+    try std.testing.expectEqualSlices(u8, &.{
+        0xa5, 0x30, 0x2e, 0x31, 0x2e, 0x30,
     }, fbs.getWritten());
 }

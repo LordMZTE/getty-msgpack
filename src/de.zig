@@ -34,7 +34,7 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
 
         const De = Self.@"getty.Deserializer";
 
-        pub const Error = getty.de.Error || Reader.Error || Reader.NoEofError || error{
+        pub const Error = getty.de.Error || std.mem.Allocator.Error || Reader.Error || Reader.NoEofError || error{
             /// An invalid byte
             InvalidFormat,
         };
