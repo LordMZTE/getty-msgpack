@@ -114,7 +114,7 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                 },
                 .fixstr => |len| {
                     const str = try self.readNBytes(arena, len);
-                    return try vis.visitString(arena, De, str, .heap);
+                    return (try vis.visitString(arena, De, str, .heap)).value;
                 },
                 .simple => |s| switch (s) {
                     .nil => return try vis.visitNull(arena, De),
@@ -128,11 +128,11 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                     .int32 => return try vis.visitInt(arena, De, try self.reader.readInt(i32, .big)),
                     .int64 => return try vis.visitInt(arena, De, try self.reader.readInt(i64, .big)),
                     .float32 => return try vis.visitFloat(arena, De, @as(f32, @bitCast(try self.reader.readInt(u32, .big)))),
-                    .float64 => return try vis.visitFloat(arena, De, @as(f32, @bitCast(try self.reader.readInt(u64, .big)))),
+                    .float64 => return try vis.visitFloat(arena, De, @as(f64, @bitCast(try self.reader.readInt(u64, .big)))),
                     .str8, .str16, .str32 => {
                         const len = try fmt.readLength(self.reader);
                         const str = try self.readNBytes(arena, len);
-                        try vis.visitString(arena, De, str, .heap);
+                        return (try vis.visitString(arena, De, str, .heap)).value;
                     },
                     .array16, .array32 => {
                         const len = try fmt.readLength(self.reader);
