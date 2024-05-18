@@ -17,5 +17,5 @@ A [Getty](https://getty.so) (de)serializer for [MessagePack](https://msgpack.org
 | Strings                             | ✅            | ✅              |
 | Maps (fixmap, map16, map32)         | ✅            | ✅              |
 | Arrays (fixarray, array16, array32) | ✅            | ✅              |
-| Bin (bin 8-32)                      | 🔧            | ❎              |
+| Bin (bin 8-32)                      | 🔧            | 🔧              |
 | Ext (fixext 1-16 and ext 8-32)      | ❎            | ❎              |

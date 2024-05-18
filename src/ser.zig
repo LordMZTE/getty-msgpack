@@ -55,13 +55,13 @@ pub fn Serializer(
 
         // >>>>> NON-STANDARD CUSTOM FUNCTIONS
 
-        /// A function to serialize a value as msgpack's bytes type. Useful with custom SBs.
-        pub fn serializeBytes(self: *Self, val: []const u8) Error!void {
+        /// A function to serialize a value as msgpack's bin type. Useful with custom SBs.
+        pub fn serializeBin(self: *Self, val: []const u8) Error!void {
             inline for (.{ u8, u16, u32 }, 0..) |N, i| {
                 if (val.len <= std.math.maxInt(N)) {
                     // bin: 0xc4 + i followed by BE length and data
                     try self.writer.writeByte(0xc4 + i);
-                    try self.writer.writeInt(N, @intCast(i), .big);
+                    try self.writer.writeInt(N, @intCast(val.len), .big);
                     try self.writer.writeAll(val);
                     break;
                 }
@@ -420,4 +420,20 @@ test "Serialize semver" {
     try std.testing.expectEqualSlices(u8, &.{
         0xa5, 0x30, 0x2e, 0x31, 0x2e, 0x30,
     }, fbs.getWritten());
+}
+
+test "Serialize Bytes" {
+    var buf: [128]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+
+    try serialize(
+        std.testing.allocator,
+        fbs.writer(),
+        @import("Bytes.zig"){.data = "iiii"},
+    );
+
+    try std.testing.expectEqualSlices(u8, &.{
+        0xc4, 0x04, 0x69, 0x69, 0x69, 0x69,
+    }, fbs.getWritten());
+
 }

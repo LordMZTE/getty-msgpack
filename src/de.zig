@@ -39,6 +39,38 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
             InvalidFormat,
         };
 
+        // >>>>> NON-STANDARD CUSTOM FUNCTIONS
+
+        /// Deserializes msgpack's native `bin` type. The visitor must implement the
+        /// `visitBin` function:
+        /// fn visitBin(
+        ///     self: Impl,
+        ///     arena: std.mem.Allocator,
+        ///     comptime Deseriailzer: type,
+        ///     data: []u8,
+        ///     life: getty.de.StringLifetime,
+        /// ) Error!Value { ... }
+        pub fn deserializeBin(
+            self: *Self,
+            arena: std.mem.Allocator,
+            vis: anytype,
+        ) Error!@TypeOf(vis).Value {
+            const fmt = try self.nextFormat();
+            switch (fmt) {
+                .simple => |s| switch (s) {
+                    .bin8, .bin16, .bin32 => {
+                        const len = try fmt.readLength(self.reader);
+                        const data = try self.readNBytes(arena, len);
+                        return try vis.impl.visitBin(arena, De, data, .heap);
+                    },
+                    else => return error.InvalidType,
+                },
+                else => return error.InvalidType,
+            }
+        }
+
+        // >>>>> UTILITIES
+
         fn readNBytes(self: *Self, arena: std.mem.Allocator, n: usize) ![]u8 {
             // TODO: use buffer and don't always alloc
             const buf = try arena.alloc(u8, n);
@@ -93,6 +125,8 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                 },
             }
         }
+
+        // >>>>> SERIALIZER INTERFACE
 
         fn deserializeAny(self: *Self, arena: std.mem.Allocator, vis: anytype) Error!@TypeOf(vis).Value {
             const fmt = try self.nextFormat();
@@ -168,14 +202,6 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                     },
 
                     .bin8, .bin16, .bin32 => {
-                        // A visitor may optionally implement a visitBin function, which is invoked here.
-                        // Signature: fn(
-                        //     self: Impl,
-                        //     arena: std.mem.Allocator,
-                        //     comptime Deseriailzer: type,
-                        //     data: []u8,
-                        //     life: StringLifetime,
-                        // ) Error!Value
                         if (!@hasDecl(@TypeOf(vis.impl), "visitBin"))
                             return error.Unsupported;
 
@@ -337,7 +363,7 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
 
         fn deserializeSeq(self: *Self, arena: std.mem.Allocator, vis: anytype) Error!@TypeOf(vis).Value {
             const fmt = try self.nextFormat();
-            return switch (fmt) {
+            switch (fmt) {
                 .fixarray => |n| {
                     var seq = SeqAccess{ .de = self, .len = n };
                     const ret = try vis.visitSeq(arena, De, seq.seqAccess());
@@ -352,10 +378,10 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                         if (seq.len != 0) return error.InvalidLength;
                         return ret;
                     },
-                    else => error.InvalidType,
+                    else => return error.InvalidType,
                 },
-                else => error.InvalidType,
-            };
+                else => return error.InvalidType,
+            }
         }
 
         fn deserializeUnion(self: *Self, arena: std.mem.Allocator, vis: anytype) Error!@TypeOf(vis).Value {
@@ -639,4 +665,20 @@ test "Deserialize union" {
     defer res.deinit();
 
     try std.testing.expectEqualDeep(Test{.foo = 42}, res.value);
+}
+
+test "Deserialize Bytes" {
+    const data = [_]u8{
+        // zig fmt: off
+        0xc4, // bin8
+        0x04, // length 4
+        0x69, 0x69, 0x69, 0x69, // data
+        // zig fmt: on
+    };
+    var fbs = std.io.fixedBufferStream(&data);
+
+    const res = try deserialize(std.testing.allocator, @import("Bytes.zig"), fbs.reader());
+    defer res.deinit();
+
+    try std.testing.expectEqualDeep(@import("Bytes.zig"){.data = "iiii"}, res.value);
 }
