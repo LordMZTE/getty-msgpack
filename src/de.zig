@@ -118,7 +118,7 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                 },
                 .simple => |s| switch (s) {
                     .nil => return try vis.visitNull(arena, De),
-                    .false, .true => try vis.visitBool(arena, De, s == .true),
+                    .false, .true => return try vis.visitBool(arena, De, s == .true),
                     .uint8 => return try vis.visitInt(arena, De, try self.reader.readInt(u8, .big)),
                     .uint16 => return try vis.visitInt(arena, De, try self.reader.readInt(u16, .big)),
                     .uint32 => return try vis.visitInt(arena, De, try self.reader.readInt(u32, .big)),
@@ -158,7 +158,7 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                         //     data: []u8,
                         //     life: StringLifetime,
                         // ) Error!Value
-                        if (!@hasDecl(vis.impl, "visitExt"))
+                        if (!@hasDecl(@TypeOf(vis.impl), "visitExt"))
                             return error.Unsupported;
 
                         const len = try fmt.readLength(self.reader);
@@ -176,7 +176,7 @@ pub fn Deserializer(comptime Reader: type, comptime dbt: anytype) type {
                         //     data: []u8,
                         //     life: StringLifetime,
                         // ) Error!Value
-                        if (!@hasDecl(vis.impl, "visitBin"))
+                        if (!@hasDecl(@TypeOf(vis.impl), "visitBin"))
                             return error.Unsupported;
 
                         const len = try fmt.readLength(self.reader);
