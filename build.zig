@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("getty");
 
-    const root_src = .{ .path = "src/main.zig" };
+    const root_src = b.path("src/main.zig");
 
     _ = b.addModule("getty-msgpack", .{
         .root_source_file = root_src,
